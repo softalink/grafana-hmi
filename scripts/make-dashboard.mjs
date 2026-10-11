@@ -2,13 +2,13 @@
 // Generates provisioning/dashboards/hmi.json: a tank screen fed by TestData
 // queries (used by the end-to-end tests) and the InTouch demo template.
 //
-// Usage: node scripts/make-dashboard.mjs [path to drawio/src/main/webapp]
+// Usage: node scripts/make-dashboard.mjs [draw.io files, default vendor/drawio]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const webapp = path.resolve(process.argv[2] || process.env.DRAWIO_WEBAPP || path.join(root, '..', 'drawio/src/main/webapp'));
+const webapp = path.resolve(process.argv[2] || path.join(root, 'vendor/drawio'));
 const demo = fs.readFileSync(path.join(webapp, 'templates/hmi/intouch_links_demo.xml'), 'utf8').trim();
 
 const attr = (obj) =>

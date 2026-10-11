@@ -24,18 +24,31 @@ The design is in the doc *Grafana HMI Panel: iframe editor design*.
 
 - Grafana 12.1 or later (tested with 12.1.1 and 13.2.2).
 - Node 22 to build.
-- A build of [softalink/drawio](https://github.com/softalink/drawio) with the HMI host-embedding changes (branch `claude/confident-gates-rqzs24`): `cd etc/build && ant app`.
+
+Nothing else: the draw.io files both plugins need are in `vendor/drawio` (see [Updating draw.io](#updating-drawio)).
 
 ## Building
 
 ```sh
-git clone https://github.com/softalink/drawio.git ../drawio   # next to this repository
-(cd ../drawio/etc/build && ant app)
 (cd panel && npm install)
-npm run build        # panel (webpack) + editor app + copies the drawio files
+npm run build        # panel (webpack) + editor app + copies vendor/drawio into both
 ```
 
-`npm run build` reads the drawio build from `../drawio/src/main/webapp`; set `DRAWIO_WEBAPP` or pass the path to `scripts/copy-drawio.mjs` to use another one. Building only the panel (`npm --prefix panel run build`) clears `panel/dist`; run `npm run copy-drawio` after it.
+Building only the panel (`npm --prefix panel run build`) clears `panel/dist`; run `npm run copy-drawio` after it.
+
+## Updating draw.io
+
+`vendor/drawio` is a trimmed build of [softalink/drawio](https://github.com/softalink/drawio) (the editor with the HMI plugin, and the HMI runtime `js/hmi-viewer.min.js`). `vendor/drawio/VERSION.json` names the branch and commit it came from. To update it:
+
+```sh
+git clone -b <branch> https://github.com/softalink/drawio.git ../drawio
+(cd ../drawio/etc/build && ant app)
+npm run update-drawio -- ../drawio/src/main/webapp
+npm run make-dashboard   # the demo dashboard embeds the demo template
+npm run build
+```
+
+The update leaves out what neither plugin uses: development sources, integrations, cloud and desktop code, the service worker, server-side files and the other viewer bundles.
 
 ## Running locally
 
@@ -86,7 +99,8 @@ panel/          the panel plugin (scaffolded with @grafana/create-plugin)
   src/editor/   Edit diagram option, overlay, window, protocol session
   tests/        Playwright tests
 editor-app/     the editor app plugin (plugin.json, module.js)
-scripts/        build-editor-app, copy-drawio, make-dashboard
+scripts/        build-editor-app, copy-drawio, make-dashboard, update-drawio
+vendor/drawio/  the draw.io build both plugins use
 provisioning/   TestData data source, editor app, HMI demo dashboard
 ```
 

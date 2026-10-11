@@ -11,6 +11,8 @@
     "typecheck": "npm --prefix panel run typecheck",
     "lint": "npm --prefix panel run lint",
     "server": "docker compose up",
-    "e2e": "npm --prefix panel run e2e"
+    "e2e": "npm --prefix panel run e2e",
+    "update-drawio": "node scripts/update-drawio.mjs",
+    "make-dashboard": "node scripts/make-dashboard.mjs"
   }
 }

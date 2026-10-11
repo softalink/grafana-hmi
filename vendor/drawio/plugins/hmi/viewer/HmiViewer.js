@@ -1,0 +1,411 @@
+/**
+ * Standalone HMI viewer (SRS HMI-RUN-9): runs HMI screens inside the
+ * draw.io GraphViewer (viewer.min.js) for embedding in third-party pages.
+ *
+ * Usage (built bundle js/hmi-viewer.min.js):
+ *
+ *   <div class="mxgraph" data-mxgraph='{"xml": "...", "hmi": {"sim": "only"}}'></div>
+ *   <script src="https://your-host/js/hmi-viewer.min.js"></script>
+ *
+ * The "hmi" config may be true or {sim, interactive, roles, config}, where
+ * config is merged into DRAWIO_CONFIG.hmi (allowedEndpoints, scripts, ...).
+ * The runtime API is available as viewer.hmi (see Hmi.Api).
+ */
+(function()
+{
+	var root = (typeof globalThis !== 'undefined') ? globalThis : window;
+	var Hmi = root.Hmi = root.Hmi || {};
+
+	// Resolves the plugin base path from the bundle location so lazy
+	// libraries (lib/mqtt.min.js) load from the same host
+	try
+	{
+		var script = document.currentScript;
+
+		// Only for the bundle (js/hmi-viewer.min.js), not the dev sources
+		if (script != null && script.src != null && /hmi-viewer\.min\.js/.test(script.src))
+		{
+			Hmi.basePath = script.src.substring(0, script.src.lastIndexOf('/') + 1) +
+				'../plugins/hmi/';
+		}
+	}
+	catch (e)
+	{
+		// ignore
+	}
+
+	/**
+	 * Minimal EditorUi adapter over a GraphViewer for the HMI runtime.
+	 */
+	function ViewerUi(viewer)
+	{
+		var self = this;
+		this.viewer = viewer;
+		this.editor = new mxEventSource();
+		this.editor.graph = viewer.graph;
+		this.editor.isChromelessView = function()
+		{
+			return true;
+		};
+		this.pages = [];
+		this.currentPage = null;
+		this.updatePages();
+
+		// Page changes from the viewer toolbar or navigate actions
+		var selectPage = viewer.selectPage;
+
+		if (selectPage != null)
+		{
+			viewer.selectPage = function(number)
+			{
+				selectPage.apply(this, arguments);
+				self.updatePages();
+				self.editor.fireEvent(new mxEventObject('pageSelected'));
+			};
+		}
+	};
+
+	/**
+	 * Creates page descriptors for the viewer's diagrams.
+	 */
+	ViewerUi.prototype.updatePages = function()
+	{
+		var viewer = this.viewer;
+		var diagrams = viewer.diagrams || [];
+		var pages = [];
+
+		for (var i = 0; i < diagrams.length; i++)
+		{
+			(function(node, index)
+			{
+				pages.push({
+					node: node,
+					index: index,
+					root: null,
+					getId: function()
+					{
+						return node.getAttribute('id');
+					},
+					getName: function()
+					{
+						return node.getAttribute('name');
+					}
+				});
+			})(diagrams[i], i);
+		}
+
+		if (pages.length == 0)
+		{
+			pages.push({index: 0, root: null, getId: function()
+			{
+				return 'page';
+			}, getName: function()
+			{
+				return '';
+			}});
+		}
+
+		this.pages = pages;
+		this.currentPage = pages[Math.min(viewer.currentPage || 0, pages.length - 1)];
+		this.currentPage.root = viewer.graph.model.getRoot();
+	};
+
+	ViewerUi.prototype.updatePageRoot = function(page)
+	{
+		if (page.root == null && page.node != null)
+		{
+			var node = Editor.parseDiagramNode(page.node);
+
+			if (node != null)
+			{
+				page.root = new mxCodec(node.ownerDocument).decode(node).root;
+			}
+		}
+
+		return page;
+	};
+
+	ViewerUi.prototype.selectPage = function(page)
+	{
+		if (this.viewer.selectPage != null && page.index != null)
+		{
+			this.viewer.selectPage(page.index);
+		}
+	};
+
+	/**
+	 * Lightweight modal confirmation (the viewer has no dialog framework).
+	 */
+	ViewerUi.prototype.confirm = function(msg, okFn, cancelFn, okLabel, cancelLabel)
+	{
+		var back = document.createElement('div');
+		back.className = 'geHmiConfirm';
+		back.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;' +
+			'align-items:center;justify-content:center;background:rgba(0,0,0,0.35);' +
+			'font:14px -apple-system,Segoe UI,Helvetica,Arial,sans-serif;';
+		var box = document.createElement('div');
+		box.setAttribute('role', 'alertdialog');
+		box.style.cssText = 'background:#fff;color:#212121;border-radius:8px;padding:20px 24px;' +
+			'max-width:420px;box-shadow:0 8px 24px rgba(0,0,0,0.3);white-space:pre-wrap;';
+		var text = document.createElement('div');
+		mxUtils.write(text, msg);
+		box.appendChild(text);
+		var buttons = document.createElement('div');
+		buttons.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:18px;';
+		box.appendChild(buttons);
+		back.appendChild(box);
+
+		var close = function(fn)
+		{
+			if (back.parentNode != null)
+			{
+				back.parentNode.removeChild(back);
+			}
+
+			mxEvent.removeListener(document, 'keydown', keyHandler);
+
+			if (fn != null)
+			{
+				fn();
+			}
+		};
+
+		var button = function(label, primary, fn)
+		{
+			var btn = document.createElement('button');
+			btn.setAttribute('type', 'button');
+			btn.className = primary ? 'geHmiConfirmOk' : 'geHmiConfirmCancel';
+			btn.style.cssText = 'padding:6px 16px;border-radius:4px;font:inherit;cursor:pointer;' +
+				(primary ? 'background:#1565C0;color:#fff;border:1px solid #1565C0;' :
+				'background:#fff;color:#212121;border:1px solid #9E9E9E;');
+			mxUtils.write(btn, label);
+			mxEvent.addListener(btn, 'click', function()
+			{
+				close(fn);
+			});
+			buttons.appendChild(btn);
+
+			return btn;
+		};
+
+		button(cancelLabel || mxResources.get('cancel') || 'Cancel', false, cancelFn);
+		var ok = button(okLabel || mxResources.get('ok') || 'OK', true, okFn);
+
+		var keyHandler = function(evt)
+		{
+			if (evt.keyCode == 27)
+			{
+				close(cancelFn);
+			}
+		};
+
+		mxEvent.addListener(document, 'keydown', keyHandler);
+		document.body.appendChild(back);
+		ok.focus();
+	};
+
+	ViewerUi.prototype.getCurrentFile = function()
+	{
+		var viewer = this.viewer;
+
+		return {
+			getHash: function()
+			{
+				return 'viewer:' + window.location.pathname;
+			},
+			getTitle: function()
+			{
+				return (viewer.graphConfig != null && viewer.graphConfig.title != null) ?
+					viewer.graphConfig.title : document.title;
+			}
+		};
+	};
+
+	ViewerUi.prototype.showDialog = function()
+	{
+		// Dialogs are not available in the viewer (prompt falls back below)
+	};
+
+	ViewerUi.prototype.hideDialog = function()
+	{
+		// No dialogs in the viewer
+	};
+
+	ViewerUi.prototype.showError = function(title, msg)
+	{
+		window.alert((title != null ? title + '\n\n' : '') + (msg || ''));
+	};
+
+	var Viewer = {};
+
+	Viewer.ViewerUi = ViewerUi;
+
+	/**
+	 * APIs (Hmi.Api) of all attached viewers, for scripting and tests.
+	 */
+	Viewer.instances = [];
+
+	/**
+	 * Starts the HMI runtime for the given GraphViewer.
+	 */
+	Viewer.attach = function(viewer, options)
+	{
+		if (viewer.graph == null || viewer.hmi != null || viewer.hmiDetached)
+		{
+			return null;
+		}
+
+		options = (options != null && typeof options === 'object') ? options : {};
+
+		if (options.config != null)
+		{
+			root.DRAWIO_CONFIG = root.DRAWIO_CONFIG || {};
+			root.DRAWIO_CONFIG.hmi = mxUtils.clone(options.config);
+		}
+
+		if (Hmi.Resources != null)
+		{
+			Hmi.Resources.install();
+		}
+
+		Hmi.Overlay.install();
+		Hmi.LevelFill.install();
+		Hmi.Flow.install();
+		Graph.customActionHandler = Hmi.Actions.handleCustomAction;
+
+		var graph = viewer.graph;
+		graph.enableFlowAnimation = true;
+		graph.hmiOverlay = new Hmi.Overlay(graph);
+
+		var ui = new ViewerUi(viewer);
+		ui.viewer = viewer;
+		ui.hmiRoles = options.roles;
+		ui.hmi = new Hmi.Api(ui);
+		viewer.hmi = ui.hmi;
+		Viewer.instances.push(ui.hmi);
+		graph.refresh();
+
+		if (options.keyScope == 'container' && graph.container != null &&
+			!graph.container.hasAttribute('tabindex'))
+		{
+			// Focusable, so key equivalents reach this runtime after a click
+			graph.container.setAttribute('tabindex', '0');
+		}
+
+		var rt = ui.hmi.run({mode: 'run', interactive: options.interactive !== false,
+			sim: options.sim, keyScope: options.keyScope});
+
+		// Status bar, fit modes and kiosk options (full-page runtime)
+		if (options.chrome && Hmi.RunChrome != null)
+		{
+			// GraphViewer sizes its container to the diagram; the full-page
+			// runtime fills the window instead (see hmi-run.html)
+			var cs = graph.container.style;
+			cs.width = '';
+			cs.height = '';
+			cs.minWidth = '';
+			cs.minHeight = '';
+			cs.maxWidth = '';
+			cs.maxHeight = '';
+			cs.overflow = 'auto';
+
+			Hmi.RunChrome.install(ui, rt);
+		}
+
+		return ui.hmi;
+	};
+
+	/**
+	 * Stops the HMI runtime of the given GraphViewer and destroys its graph,
+	 * for hosts that mount and unmount viewers (dashboard panels).
+	 */
+	Viewer.detach = function(viewer)
+	{
+		if (viewer == null)
+		{
+			return;
+		}
+
+		var api = viewer.hmi;
+
+		if (api != null)
+		{
+			try
+			{
+				api.stop();
+			}
+			catch (e)
+			{
+				// ignore
+			}
+
+			mxUtils.remove(api, Viewer.instances);
+			viewer.hmi = null;
+		}
+
+		var graph = viewer.graph;
+
+		if (graph != null && !viewer.hmiDetached)
+		{
+			viewer.hmiDetached = true;
+			var container = graph.container;
+
+			if (container != null && typeof ResizeSensor !== 'undefined' && ResizeSensor.detach != null)
+			{
+				ResizeSensor.detach(container);
+			}
+
+			// Size callbacks still queued by the viewer return early once the
+			// graph is gone (hook in GraphViewer.addSizeHandler)
+			graph.destroy();
+			viewer.graph = null;
+
+			if (container != null)
+			{
+				container.innerHTML = '';
+			}
+		}
+	};
+
+	/**
+	 * Hooks GraphViewer initialization for data-mxgraph configs with "hmi".
+	 */
+	Viewer.install = function()
+	{
+		if (typeof GraphViewer === 'undefined' || Viewer.installed)
+		{
+			return;
+		}
+
+		Viewer.installed = true;
+		var graphViewerInit = GraphViewer.prototype.init;
+
+		GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
+		{
+			graphViewerInit.apply(this, arguments);
+
+			if (graphConfig != null && graphConfig.hmi != null && graphConfig.hmi !== false)
+			{
+				var viewer = this;
+
+				window.setTimeout(function()
+				{
+					try
+					{
+						Viewer.attach(viewer, graphConfig.hmi);
+					}
+					catch (e)
+					{
+						if (window.console != null)
+						{
+							console.error('HMI viewer:', e);
+						}
+					}
+				}, 0);
+			}
+		};
+	};
+
+	Hmi.Viewer = Viewer;
+	Viewer.install();
+})();
