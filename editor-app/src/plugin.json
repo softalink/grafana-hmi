@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "app",
+  "name": "HMI Editor",
+  "id": "softalink-hmieditor-app",
+  "autoEnabled": true,
+  "info": {
+    "keywords": ["hmi", "scada", "draw.io", "editor"],
+    "description": "The draw.io editor with the HMI plugin, opened by the HMI panel to edit its screen",
+    "author": {
+      "name": "Softalink"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "includes": [],
+  "dependencies": {
+    "grafanaDependency": ">=12.1.0",
+    "plugins": []
+  }
+}

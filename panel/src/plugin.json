@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "panel",
+  "name": "HMI",
+  "id": "softalink-hmi-panel",
+  "info": {
+    "keywords": ["hmi", "scada", "draw.io", "intouch", "panel"],
+    "description": "Runs draw.io HMI/SCADA screens with InTouch-style animation links on Grafana data",
+    "author": {
+      "name": "Softalink"
+    },
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=12.1.0",
+    "plugins": []
+  }
+}

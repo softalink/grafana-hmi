@@ -1,0 +1,16 @@
+{
+  "name": "grafana-hmi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grafana plugins for draw.io HMI/SCADA screens: the HMI panel and the HMI editor app",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "npm --prefix panel run build && node scripts/build-editor-app.mjs && node scripts/copy-drawio.mjs",
+    "copy-drawio": "node scripts/copy-drawio.mjs",
+    "test": "npm --prefix panel run test:ci",
+    "typecheck": "npm --prefix panel run typecheck",
+    "lint": "npm --prefix panel run lint",
+    "server": "docker compose up",
+    "e2e": "npm --prefix panel run e2e"
+  }
+}

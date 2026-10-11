@@ -1,0 +1,9 @@
+node_modules/
+panel/dist/
+editor-app/dist/
+panel/test-results/
+panel/playwright-report/
+panel/playwright/.auth/
+panel/.eslintcache
+*.log
+.DS_Store

@@ -1,0 +1,22 @@
+# Grafana with both plugins for development and the end-to-end tests.
+# Build first: npm run build (needs the drawio build, see README).
+services:
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-13.2.2}
+    container_name: grafana-hmi
+    ports:
+      - ${GRAFANA_PORT:-3000}:3000/tcp
+    volumes:
+      - ./panel/dist:/var/lib/grafana/plugins/softalink-hmi-panel
+      - ./editor-app/dist:/var/lib/grafana/plugins/softalink-hmieditor-app
+      - ./provisioning:/etc/grafana/provisioning
+    environment:
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: softalink-hmi-panel,softalink-hmieditor-app
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_LOG_LEVEL: info
+      # The editor overlay is an iframe, so Grafana must allow framing.
+      # With GF_SECURITY_ALLOW_EMBEDDING=false the panel opens the editor
+      # in a window instead.
+      GF_SECURITY_ALLOW_EMBEDDING: ${GF_SECURITY_ALLOW_EMBEDDING:-true}
