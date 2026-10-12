@@ -1,3 +1,5 @@
+> **Superseded.** These plugins moved to [softalink/draw.hmi](https://github.com/softalink/draw.hmi) (folder `grafana/`), which builds them on the official draw.io release instead of the softalink/drawio fork. This repository is no longer maintained.
+
 # Grafana HMI
 
 Grafana plugins that run [draw.io HMI/SCADA screens](https://github.com/softalink/drawio/tree/main/docs/hmi) on Grafana data:
